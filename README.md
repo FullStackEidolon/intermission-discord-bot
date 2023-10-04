@@ -10,4 +10,5 @@ You'll need to turn on appropriate presence permissions at https://discord.com/d
 #To run:
 In the root directory, run
 `docker compose build`
+
 `docker compose up -d`
