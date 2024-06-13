@@ -1,3 +1,4 @@
-
+#exclude environmental variables
 .env
-
+./data/**
+/data/*

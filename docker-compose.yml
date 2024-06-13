@@ -2,8 +2,9 @@ version: '3'
 
 services:
   discord-bot:
+    container_name: discord-bot
     build: .
-    restart: always
+    restart: unless-stopped
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
     volumes:
