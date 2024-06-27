@@ -24,7 +24,7 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 # Lists to store movies and TV shows
 MOVIES_FILE = 'data/movies.json'
 TV_SHOWS_FILE = 'data/tv_shows.json'
-
+BANLIST_FILE = 'data/banlist.json'
 
 def read_file(file_name):
     try:
@@ -101,6 +101,11 @@ async def add_tv(ctx, *, tv_show_name):
     append_to_file(TV_SHOWS_FILE, tv_show_name)
     await ctx.send(f'TV show "{tv_show_name}" added to the list!')
 
+@bot.command()
+async def ban(ctx, *, card_name):
+    append_to_file(BANLIST_FILE, card_name)
+    await ctx.send(f'Card "{card_name}" added to the banlist!')
+
 
 @bot.command()
 async def list_movies(ctx):
@@ -121,6 +126,15 @@ async def list_tv(ctx):
         response = "No TV shows added yet!"
     await ctx.send(response)
 
+@bot.command()
+async def list_bans(ctx):
+    bans = read_file(BANLIST_FILE)
+    if bans:
+        response = "Movies:\n" + "\n".join(f"{index + 1}. {movie}" for index, movie in enumerate(bans))
+    else:
+        response = "Nothing banned yet"
+    await ctx.send(response
+                   )
 
 @bot.command()
 async def delete_movie(ctx, *, identifier: str):
@@ -133,6 +147,11 @@ async def delete_tv(ctx, *, identifier: str):
     response = delete_from_file(TV_SHOWS_FILE, identifier)
     await ctx.send(response)
 
+
+@bot.command()
+async def unban(ctx, *, identifier: str):
+    response = delete_from_file(BANLIST_FILE, identifier)
+    await ctx.send(response)
 
 @bot.command()
 async def help(ctx, cmd: str = None):
@@ -195,12 +214,32 @@ async def thats_a_good_pig(ctx):
 async def whos_dad(ctx):
     if ctx.author.name == "triskeilodon":
         await ctx.send("You!")
+    elif ctx.author.name == "adbreak":
+        uncertain_responses = [
+            "You da boss",
+            "Um, don't boot me chief"
+        ]
+        await ctx.send(random.choice(uncertain_responses))
+    elif ctx.author.name == "www.sam.net":
+        uncertain_responses = [
+            "Legends speak of the collection wizard..."
+        ]
+        await ctx.send(random.choice(uncertain_responses))
     else:
         uncertain_responses = [
             "ummm...", "hmmm...", "uhhh...", "errr...", "ahhh...",
-            "mmm...", "ehhh...", "ooh...", "...dude..."
+            "mmm...", "ehhh...", "ooh...", "...dude...", "...yikes"
         ]
         await ctx.send(random.choice(uncertain_responses))
+
+@bot.command()
+async def wilhelm_scream(ctx):
+    await ctx.send("uuaAAuugghhh... \n https://youtu.be/4YDpuA90KEY?si=TyyaHCn4GTY2eHNK")
+
+@bot.command()
+async def the_lick(ctx):
+    await ctx.send("Da na-na-na-na-naa na na \n https://www.youtube.com/watch?v=krDxhnaKD7Q")
+
 
 
 # Use your bot token to start the bot
