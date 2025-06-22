@@ -7,7 +7,18 @@ from dotenv import load_dotenv
 import random
 from discord.ext import tasks
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+import requests
+from typing import Optional
+
+# Import silent_submersible functionality
+from silent_submersible import (
+    post_submersible_sdk,
+    post_submersible_webhook,
+    get_next_post_time,
+    set_next_post_time,
+    time_until_next_post
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -89,11 +100,31 @@ def delete_from_file(file_name, identifier):
         return "Item not found. Please provide a valid index or substring."
 
 
+@tasks.loop(seconds=30)  # Check every 30 seconds
+async def check_silent_submersible():
+    """Background task to check if it's time to post the silent submersible"""
+    next_time = get_next_post_time()
+    if next_time and datetime.now(UTC) >= next_time:
+        # Time to post!
+        try:
+            # Use webhook to post
+            post_submersible_webhook()
+            logging.info("Silent submersible posted automatically via webhook!")
+            # Clear the scheduled time
+            set_next_post_time(None)
+        except Exception as e:
+            logging.error(f"Error in automatic silent submersible post: {e}")
+
 @bot.event
 async def on_ready():
-    logging.info(f'Logged in as {bot.user.name}({bot.user.id})')
-    if not schedule_silent_submersible.is_running():
-        schedule_silent_submersible.start()
+    if bot.user:
+        logging.info(f'Logged in as {bot.user.name}({bot.user.id})')
+    else:
+        logging.info('Bot logged in but user is None')
+    
+    # Start the background task
+    if not check_silent_submersible.is_running():
+        check_silent_submersible.start()
 
 @bot.command()
 async def hello(ctx):
@@ -164,7 +195,7 @@ async def unban(ctx, *, identifier: str):
     await ctx.send(response)
 
 @bot.command()
-async def help(ctx, cmd: str = None):
+async def help(ctx, cmd: Optional[str] = None):
     if cmd:
         cmd = cmd.lower()
         # Provide specific help for each command
@@ -184,6 +215,16 @@ async def help(ctx, cmd: str = None):
         elif cmd == 'delete_tv':
             await ctx.send(
                 "Deletes a TV show from the list based on its number or the name of the tv show. Usage: `!delete_tv <number>`")
+        elif cmd == 'test_sub':
+            await ctx.send("Tests the silent submersible functionality. Usage: `!test_sub`")
+        elif cmd == 'sub_status':
+            await ctx.send("Check the status of the next silent submersible post. Usage: `!sub_status`")
+        elif cmd == 'sub_webhook':
+            await ctx.send("Post silent submersible via webhook. Usage: `!sub_webhook`")
+        elif cmd == 'sub_schedule':
+            await ctx.send("Schedule the next silent submersible post. Usage: `!sub_schedule [hours]` (optional hours, default: random 5-21 days)")
+        elif cmd == 'test_sub_scheduler':
+            await ctx.send("Test the scheduler by scheduling a post for 10 seconds in the future. Usage: `!test_sub_scheduler`")
         else:
             await ctx.send(f"No detailed help available for '{cmd}'. Try `!help` for the list of commands.")
     else:
@@ -203,6 +244,13 @@ Here are the commands you can use:
 `!delete_movie <number>` - Deletes a movie from the list based on its name/number in the `!list_movies` command. Replace `<number>` with the number of the movie you want to remove.
 
 `!delete_tv <number>` - Deletes a TV show from the list based on its name/number in the `!list_tv` command. Replace `<number>` with the number of the TV show you want to remove.
+
+**Silent Submersible Commands:**
+`!test_sub` - Test the silent submersible functionality
+`!sub_status` - Check the status of the next silent submersible post
+`!sub_webhook` - Post silent submersible via webhook
+`!sub_schedule [hours]` - Schedule the next silent submersible post (optional hours, default: random 5-21 days)
+`!test_sub_scheduler` - Test the scheduler (posts in 10 seconds)
 
 Type `!help command` for more info on a command.
 """
@@ -252,36 +300,49 @@ async def the_lick(ctx):
 
 
 ### Silent Submersible ###
-async def post_and_delete_silent_submersible(channel: discord.TextChannel):
-    try:
-        msg = await channel.send("[[Silent Submersible]]")
-        await asyncio.sleep(DELETE_AFTER_SECONDS)
-        await msg.delete()
-    except Exception as e:
-        logging.error(f"Error posting Silent Submersible: {e}")
-
-@tasks.loop(count=1)
-async def schedule_silent_submersible():
-    await bot.wait_until_ready()
-    try:
-        # Replace CHANNEL_ID with the actual ID of your channel
-        channel = bot.get_channel(int(os.getenv("SUBMERSIBLE_CHANNEL_ID")))
-        if not channel:
-            logging.error("Silent Submersible channel not found.")
-            return
-
-        # Wait a random time between min and max window
-        wait_time = random.randint(MINIMUM_SUB_WINDOW, MAXIMUM_SUB_WINDOW)
-        logging.info(f"Waiting {wait_time} seconds to post Silent Submersible")
-        await asyncio.sleep(wait_time)
-
-        await post_and_delete_silent_submersible(channel)
-    except Exception as e:
-        logging.error(f"Error in Silent Submersible scheduler: {e}")
-
 @bot.command()
 async def test_sub(ctx):
-    await post_and_delete_silent_submersible(ctx.channel)
+    """Test the silent submersible functionality"""
+    await post_submersible_sdk(ctx.channel)
+    await ctx.send("Silent submersible test posted!")
+
+@bot.command()
+async def sub_status(ctx):
+    """Check the status of the next silent submersible post"""
+    status = time_until_next_post()
+    await ctx.send(f"Silent Submersible Status: {status}")
+
+@bot.command()
+async def sub_webhook(ctx):
+    """Post silent submersible via webhook"""
+    post_submersible_webhook()
+    await ctx.send("Silent submersible posted via webhook!")
+
+@bot.command()
+async def sub_schedule(ctx, hours: Optional[str] = None):
+    """Schedule the next silent submersible post (default: random 5-21 days)"""
+    if hours is None:
+        # Random time between MINIMUM_SUB_WINDOW and MAXIMUM_SUB_WINDOW
+        import random
+        random_seconds = random.randint(MINIMUM_SUB_WINDOW, MAXIMUM_SUB_WINDOW)
+        next_time = datetime.now(UTC) + timedelta(seconds=random_seconds)
+    else:
+        try:
+            hours_int = int(hours)
+            next_time = datetime.now(UTC) + timedelta(hours=hours_int)
+        except ValueError:
+            await ctx.send("Please provide a valid number of hours.")
+            return
+    
+    set_next_post_time(next_time)
+    await ctx.send(f"Next silent submersible post scheduled for: {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+@bot.command()
+async def test_sub_scheduler(ctx):
+    """Test the scheduler by scheduling a post for 10 seconds in the future"""
+    next_time = datetime.now(UTC) + timedelta(seconds=10)
+    set_next_post_time(next_time)
+    await ctx.send(f"Test scheduled! Silent submersible will post in 10 seconds at: {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
 # Use your bot token to start the bot
 bot.run(bot_token)
