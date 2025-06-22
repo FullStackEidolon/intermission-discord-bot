@@ -61,7 +61,7 @@ async def post_submersible_sdk(channel: discord.TextChannel, add_message=True, a
         logging.error(f"SDK post error: {e}")
 
 
-def post_submersible_webhook(add_message=False, add_card=True, custom_avatar=True):
+def post_submersible_webhook(add_message=False, add_card=True, custom_avatar=False):
     webhook_url = os.getenv("SILENT_SUB_WEBHOOK")
     avatar_url = os.getenv("SUB_AVATAR_URL")
 
