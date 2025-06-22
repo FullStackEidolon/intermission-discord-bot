@@ -5,6 +5,9 @@ from discord.ext import commands
 import logging
 from dotenv import load_dotenv
 import random
+from discord.ext import tasks
+import asyncio
+from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,6 +28,12 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 MOVIES_FILE = 'data/movies.json'
 TV_SHOWS_FILE = 'data/tv_shows.json'
 BANLIST_FILE = 'data/banlist.json'
+
+# Silent Submersible Params
+MAXIMUM_SUB_WINDOW = 21 * 86400  # in seconds (21 days)
+MINIMUM_SUB_WINDOW = 5 * 86400   # in seconds (5 days)
+DELETE_AFTER_SECONDS = 15        # how long the message lives before deletion
+
 
 def read_file(file_name):
     try:
@@ -83,7 +92,8 @@ def delete_from_file(file_name, identifier):
 @bot.event
 async def on_ready():
     logging.info(f'Logged in as {bot.user.name}({bot.user.id})')
-
+    if not schedule_silent_submersible.is_running():
+        schedule_silent_submersible.start()
 
 @bot.command()
 async def hello(ctx):
@@ -241,6 +251,37 @@ async def the_lick(ctx):
     await ctx.send("Da na-na-na-na-naa na na \n https://www.youtube.com/watch?v=krDxhnaKD7Q")
 
 
+### Silent Submersible ###
+async def post_and_delete_silent_submersible(channel: discord.TextChannel):
+    try:
+        msg = await channel.send("[[Silent Submersible]]")
+        await asyncio.sleep(DELETE_AFTER_SECONDS)
+        await msg.delete()
+    except Exception as e:
+        logging.error(f"Error posting Silent Submersible: {e}")
+
+@tasks.loop(count=1)
+async def schedule_silent_submersible():
+    await bot.wait_until_ready()
+    try:
+        # Replace CHANNEL_ID with the actual ID of your channel
+        channel = bot.get_channel(int(os.getenv("SUBMERSIBLE_CHANNEL_ID")))
+        if not channel:
+            logging.error("Silent Submersible channel not found.")
+            return
+
+        # Wait a random time between min and max window
+        wait_time = random.randint(MINIMUM_SUB_WINDOW, MAXIMUM_SUB_WINDOW)
+        logging.info(f"Waiting {wait_time} seconds to post Silent Submersible")
+        await asyncio.sleep(wait_time)
+
+        await post_and_delete_silent_submersible(channel)
+    except Exception as e:
+        logging.error(f"Error in Silent Submersible scheduler: {e}")
+
+@bot.command()
+async def test_sub(ctx):
+    await post_and_delete_silent_submersible(ctx.channel)
 
 # Use your bot token to start the bot
 bot.run(bot_token)
